@@ -47,7 +47,9 @@ jobs:
           npm run build
 
       - name: Archive built files
-        run: tar --exclude='dist/apps/frontend/.next/cache' -czf dist-artifacts.tar.gz dist/ libraries/ node_modules/
+        run: |
+          tar --exclude='dist/apps/frontend/.next/cache' -czf dist-artifacts.tar.gz dist/ libraries/ node_modules/
+          ls -lh dist-artifacts.tar.gz
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -79,6 +81,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: dist-artifacts-${{ github.run_id }}
+
+      - name: Validate artifact download
+        run: |
+          ls -lh dist-artifacts.tar.gz
 
       - name: Extract build artifacts
         run: tar -xzf dist-artifacts.tar.gz
