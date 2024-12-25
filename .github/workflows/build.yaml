@@ -47,9 +47,7 @@ jobs:
           npm run build
 
       - name: Archive built files
-        run: |
-          tar --exclude='dist/apps/frontend/.next/cache' -czf dist-artifacts.tar.gz dist/ libraries/ node_modules/
-          ls -lh dist-artifacts.tar.gz
+        run: tar --exclude='dist/apps/frontend/.next/cache' -czf dist-artifacts.tar.gz dist/ libraries/ node_modules/
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -82,10 +80,6 @@ jobs:
         with:
           name: dist-artifacts-${{ github.run_id }}
 
-      - name: Validate artifact download
-        run: |
-          ls -lh dist-artifacts.tar.gz
-
       - name: Extract build artifacts
         run: tar -xzf dist-artifacts.tar.gz
 
@@ -96,16 +90,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare platform tag
+        id: platform-tag
+        run: |
+          CLEANED_PLATFORM="${{ matrix.platform }}/"
+          CLEANED_PLATFORM="${CLEANED_PLATFORM/\//-}"
+          echo "cleaned_platform=${CLEANED_PLATFORM}" >> $GITHUB_ENV
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: var/docker/Dockerfile
+          file: var/docker/Dockerfile.ci
           push: true
           platforms: ${{ matrix.platform }}
           tags: |
             ghcr.io/jasonnathan/postiz-app:latest
-            ghcr.io/jasonnathan/postiz-app:${{ needs.build.outputs.container_version }}-${{ matrix.platform }}
+            ghcr.io/jasonnathan/postiz-app:${{ needs.build.outputs.container_version }}-${{ env.cleaned_platform }}
             ghcr.io/jasonnathan/postiz-app:${{ needs.build.outputs.container_version }}
 
   # Step 3: Create a multi-architecture Docker manifest
