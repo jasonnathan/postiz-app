@@ -89,18 +89,17 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: var/docker/Dockerfile
-          push: true
-          platforms: ${{ matrix.platform }}
-          tags: |
-            ghcr.io/jasonnathan/postiz-app:latest
-            ghcr.io/jasonnathan/postiz-app:${{ needs.build.outputs.container_version }}-${{ matrix.platform }}
-            ghcr.io/jasonnathan/postiz-app:${{ needs.build.outputs.container_version }}
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: var/docker/Dockerfile
+        push: true
+        platforms: ${{ matrix.platform }}
+        tags: |
+          ghcr.io/jasonnathan/postiz-app:latest
+          ghcr.io/jasonnathan/postiz-app:${{ needs.build.outputs.container_version }}-${{ matrix.platform | replace('/', '-') }}
+          ghcr.io/jasonnathan/postiz-app:${{ needs.build.outputs.container_version }}
 
   # Step 3: Create a multi-architecture Docker manifest
   create-manifest:
