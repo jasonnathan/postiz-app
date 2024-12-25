@@ -50,10 +50,12 @@ jobs:
         run: tar --exclude='dist/apps/frontend/.next/cache' -czf dist-artifacts.tar.gz dist/ libraries/ node_modules/
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: dist-artifacts
+          name: dist-artifacts-${{ github.run_id }}
           path: dist-artifacts.tar.gz
+          compression-level: 6
+          overwrite: true
 
       - name: Set container version
         id: set-container-version
@@ -74,9 +76,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: dist-artifacts
+          name: dist-artifacts-${{ github.run_id }}
 
       - name: Extract build artifacts
         run: tar -xzf dist-artifacts.tar.gz
