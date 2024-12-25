@@ -30,9 +30,11 @@ jobs:
         node-version: ['20.17.0']
 
     steps:
+      # Checkout repository
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Set up Node.js and cache dependencies
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
@@ -41,20 +43,25 @@ jobs:
           cache-dependency-path: |
             **/package-lock.json
 
+      # Install dependencies and build project
       - name: Install dependencies and build
         run: |
           npm ci
           npm run build
 
+      # Archive build artifacts, excluding unnecessary files
       - name: Archive built files
-        run: tar -czf dist-artifacts.tar.gz dist/ libraries/ node_modules/
+        run: |
+          tar --exclude='dist/apps/frontend/.next/cache' -czf dist-artifacts.tar.gz dist/ libraries/ node_modules/
 
+      # Upload archived artifacts
       - name: Upload build artifacts
         uses: actions/upload-artifact@v3
         with:
           name: dist-artifacts
           path: dist-artifacts.tar.gz
 
+      # Generate a container version based on timestamp
       - name: Set container version
         id: set-container-version
         run: echo "container_version=$(date +'%Y%m%d%H%M%S')" >> "$GITHUB_OUTPUT"
@@ -68,17 +75,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Checkout repository
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Download previously built artifacts
       - name: Download build artifacts
         uses: actions/download-artifact@v3
         with:
           name: dist-artifacts
 
+      # Extract build artifacts
       - name: Extract build artifacts
         run: tar -xzf dist-artifacts.tar.gz
 
+      # Log in to GitHub Container Registry
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -86,6 +97,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Build and push Docker image
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -104,6 +116,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Log in to GitHub Container Registry
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -111,6 +124,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Create and push Docker manifest for multi-platform support
       - name: Create and push Docker manifest
         run: |
           docker manifest create \
