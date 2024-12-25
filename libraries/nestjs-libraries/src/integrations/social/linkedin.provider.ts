@@ -22,7 +22,7 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
     'openid',
     'profile',
     'w_member_social',
-    'r_basicprofile',
+    'r_liteprofile',
     'rw_organization_admin',
     'w_organization_social',
     'r_organization_social',

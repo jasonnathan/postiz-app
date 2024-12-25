@@ -24,7 +24,7 @@ export class LinkedinPageProvider
     'openid',
     'profile',
     'w_member_social',
-    'r_basicprofile',
+    'r_liteprofile',
     'rw_organization_admin',
     'w_organization_social',
     'r_organization_social',

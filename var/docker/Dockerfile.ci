@@ -1,0 +1,92 @@
+# Set Node.js version
+ARG NODE_VERSION="20.17"
+
+# Base image for common setup
+FROM docker.io/node:${NODE_VERSION}-alpine3.19 AS base
+
+## Reduce unnecessary logs
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Install system dependencies
+RUN apk add --no-cache \
+    caddy \
+    bash=5.2.21-r0 \
+    supervisor=4.2.5-r4
+
+# Set working directory
+WORKDIR /app
+
+# Expose application ports
+EXPOSE 3000
+EXPOSE 4200
+EXPOSE 5000
+
+# Add entrypoint, supervisor configs, and environment setup
+COPY var/docker/entrypoint.sh /app/entrypoint.sh
+COPY var/docker/supervisord.conf /etc/supervisord.conf
+COPY var/docker/supervisord /app/supervisord_available_configs/
+COPY var/docker/Caddyfile /app/Caddyfile
+COPY .env.example /config/postiz.env
+
+# Define volumes for configuration and uploads
+VOLUME /config
+VOLUME /uploads
+
+# Labels for metadata
+LABEL org.opencontainers.image.source=https://github.com/gitroomhq/postiz-app
+
+# Default entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Development container for building the application
+FROM base AS devcontainer
+
+# Install build tools for Node.js and native dependencies
+RUN apk add --no-cache \
+    pkgconfig \
+    gcc \
+    pixman-dev \
+    cairo-dev \
+    pango-dev \
+    make \
+    build-base \
+    python3
+
+# Copy core project files
+COPY nx.json tsconfig.base.json package.json package-lock.json build.plugins.js /app/
+COPY apps /app/apps/
+COPY libraries /app/libraries/
+
+# Install all dependencies and build projects
+RUN npm ci --no-fund && npx nx run-many --target=build --projects=frontend,backend,workers,cron
+
+# Define volumes for development use
+VOLUME /config
+VOLUME /uploads
+
+# Labels for development image
+LABEL org.opencontainers.image.title="Postiz App (DevContainer)"
+
+# Production-ready output image
+FROM base AS dist
+
+# Copy dependencies from the devcontainer stage
+COPY --from=devcontainer /app/node_modules/ /app/node_modules/
+
+# Copy built application files and Prisma-related files
+COPY --from=devcontainer /app/dist/ /app/dist/
+COPY --from=devcontainer /app/libraries/ /app/libraries/
+
+# Copy additional runtime configurations
+COPY nx.json package.json /app/
+
+# Clean up build tools (optional for smaller images)
+RUN apk del pkgconfig gcc pixman-dev cairo-dev pango-dev make build-base python3 || true
+
+# Define volumes for runtime use
+VOLUME /config
+VOLUME /uploads
+
+# Labels for production image
+LABEL org.opencontainers.image.title="Postiz App (Production)"

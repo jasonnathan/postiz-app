@@ -1,5 +1,4 @@
----
-name: Build
+name: "Build and Push Docker Image"
 
 on:
   push:
@@ -10,8 +9,9 @@ on:
       - apps/**
       - '!apps/docs/**'
       - libraries/**
-
   pull_request:
+    branches:
+      - main
     paths:
       - package.json
       - apps/**
@@ -19,16 +19,20 @@ on:
       - libraries/**
 
 jobs:
+  # Step 1: Build the project
   build:
     runs-on: ubuntu-latest
+    outputs:
+      container_version: ${{ steps.set-container-version.outputs.container_version }}
 
     strategy:
       matrix:
         node-version: ['20.17.0']
-        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
@@ -37,16 +41,80 @@ jobs:
           cache-dependency-path: |
             **/package-lock.json
 
-      # https://nextjs.org/docs/pages/building-your-application/deploying/ci-build-caching#github-actions
-      - uses: actions/cache@v4
+      - name: Install dependencies and build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Archive built files
+        run: tar -czf dist-artifacts.tar.gz dist/ libraries/ node_modules/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
         with:
-          path: |
-            ~/.npm
-            ${{ github.workspace }}/.next/cache
+          name: dist-artifacts
+          path: dist-artifacts.tar.gz
 
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
-          restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
+      - name: Set container version
+        id: set-container-version
+        run: echo "container_version=$(date +'%Y%m%d%H%M%S')" >> "$GITHUB_OUTPUT"
 
-      - run: npm ci
-      - run: npm run build
+  # Step 2: Build and push Docker images
+  build-and-push:
+    needs: build
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: dist-artifacts
+
+      - name: Extract build artifacts
+        run: tar -xzf dist-artifacts.tar.gz
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: var/docker/Dockerfile
+          push: true
+          platforms: ${{ matrix.platform }}
+          tags: |
+            ghcr.io/jasonnathan/postiz-app:latest
+            ghcr.io/jasonnathan/postiz-app:${{ needs.build.outputs.container_version }}-${{ matrix.platform }}
+            ghcr.io/jasonnathan/postiz-app:${{ needs.build.outputs.container_version }}
+
+  # Step 3: Create a multi-architecture Docker manifest
+  create-manifest:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push Docker manifest
+        run: |
+          docker manifest create \
+            ghcr.io/jasonnathan/postiz-app:latest \
+            ghcr.io/jasonnathan/postiz-app:${{ needs.build.outputs.container_version }}-linux/amd64 \
+            ghcr.io/jasonnathan/postiz-app:${{ needs.build.outputs.container_version }}-linux/arm64
+          docker manifest push ghcr.io/jasonnathan/postiz-app:latest
